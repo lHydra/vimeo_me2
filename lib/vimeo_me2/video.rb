@@ -38,15 +38,49 @@ module VimeoMe2
       @video['password'] = password
     end
 
+    def duration
+      @video['duration']
+    end
+
+    # STATUSES
+
+    def status
+      @video['status']
+    end
+
+    def upload_status
+      @video.dig('upload', 'status')
+    end
+
+    def transcode_status
+      @video.dig('transcode', 'status')
+    end
+
     def privacy= privacy_options
       privacy.merge! privacy_options
     end
 
-    def update
-      body = @video
+    def available?
+      status == 'available'
+    end
+
+    def transcoding_error?
+      status == 'transcoding_error'
+    end
+
+    def unavailable?
+      status == 'unavailable'
+    end
+
+    def uploading_error?
+      status == 'uploading_error'
+    end
+
+    def update(params = {})
+      body = @video.merge(params)
       # temporary fix, because API does not accept privacy in request
       body.delete('privacy')
-      patch(nil, body:body, code:[200,204])
+      patch(nil, body: body, code: [200,204])
     end
 
     def destroy
@@ -55,9 +89,10 @@ module VimeoMe2
     end
 
     private
-      def set_uri video_id
-        @video_id = video_id
-        @base_uri = /videos?/.match(video_id.to_s) ? video_id : "/videos/#{video_id.to_s}"
-      end
+
+    def set_uri video_id
+      @video_id = video_id
+      @base_uri = /videos?/.match(video_id.to_s) ? video_id : "/videos/#{video_id.to_s}"
+    end
   end
 end

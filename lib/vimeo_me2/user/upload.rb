@@ -1,3 +1,5 @@
+require 'open-uri'
+
 module VimeoMe2
   module UserMethods
     module Upload
@@ -5,12 +7,14 @@ module VimeoMe2
       # Upload a video object to the authenticated account
       #
       # @param [File] video A File that contains a valid video format
-      def upload_video video
-        @video = video
-        @ticket = create_video
+      def upload_video path_or_url, params = {}
+        @video = open(path_or_url, 'rb')
+        @ticket = create_video(params)
         start_upload
-        video = change_name_and_get_video
+        video = VimeoMe2::Video.new(@token, @ticket['uri']).video
         return video
+        # video = change_name_and_get_video
+        # return video
       end
 
       # Upload a video to the authenticated account
@@ -29,41 +33,41 @@ module VimeoMe2
 
       private
 
-        def change_name_and_get_video name = nil
-          video = VimeoMe2::Video.new(@token, @ticket['uri'])
-          video.name = name || get_file_name
-          video.update
-        end
+      def change_name_and_get_video name = nil
+        video = VimeoMe2::Video.new(@token, @ticket['uri'])
+        video.name = name || get_file_name
+        video.update
+      end
 
-        def get_file_name
-          return @video.path if @video.is_a? File
-          return @video.original_filename
-        end
+      def get_file_name
+        return @video.path if @video.is_a? File
+        return @video.original_filename
+      end
 
-        # 3.4 Update
-        def create_video
-          tus = {approach: 'tus', size: @video.size.to_s}
-          body = {upload: tus}
-          post '/videos', body: body, code: 200
-        end
+      # 3.4 Update
+      def create_video params
+        tus = {approach: 'tus', size: @video.size.to_s}
+        body = {upload: tus}.merge(params)
+        post '/videos', body: body, code: 200
+      end
 
-        # start the upload
-        def start_upload
-          headers = {'Content-Type' => 'application/offset+octet-stream'}
-          headers['Tus-Resumable'] = '1.0.0'
-          headers['Upload-Offset'] = '0'
-          @video.rewind
-          video_content = @video.read(@video.size).to_s
-          begin
-            body = video_content[headers['Upload-Offset'].to_i..-1]
-            patch @ticket['upload']['upload_link'], body: body, headers: headers, code:204
-            headers['Upload-Offset'] = @client.last_request.headers['upload-offset']
-          end while upload_incomplete
-        end
+      # start the upload
+      def start_upload
+        headers = {'Content-Type' => 'application/offset+octet-stream'}
+        headers['Tus-Resumable'] = '1.0.0'
+        headers['Upload-Offset'] = '0'
+        @video.rewind
+        video_content = @video.read(@video.size).to_s
+        begin
+          body = video_content[headers['Upload-Offset'].to_i..-1]
+          patch @ticket['upload']['upload_link'], body: body, headers: headers, code:204
+          headers['Upload-Offset'] = @client.last_request.headers['upload-offset']
+        end while upload_incomplete
+      end
 
-        def upload_incomplete
-          @client.last_request.headers['upload-offset'].to_i != @video.size
-        end
+      def upload_incomplete
+        @client.last_request.headers['upload-offset'].to_i != @video.size
+      end
     end
   end
 end
